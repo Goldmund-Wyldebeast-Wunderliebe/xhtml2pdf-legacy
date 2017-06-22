@@ -15,6 +15,9 @@ syntax: glob
 /solr/
 /files/
 /.hg/
+/build/
+/dist/
+/xhtml2pdf_legacy.egg-info/
 
 # media files
 /source/media/
