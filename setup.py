@@ -25,14 +25,14 @@ except ImportError:
 README = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
 setup(
-    name="xhtml2pdf",
-    version="0.0.3.1-gww",
+    name="xhtml2pdf-legacy",
+    version="3.0.34",
     description="PDF generator using HTML and CSS",
     license="Apache License 2.0",
     author="Dirk Holtwick",
     maintainer="Christopher Glass",
     maintainer_email="tribaal@gmail.com",
-    url="http://www.xhtml2pdf.com",
+    url="https://github.com/Goldmund-Wyldebeast-Wunderliebe/xhtml2pdf-legacy",
     keywords="PDF, HTML, XHTML, XML, CSS",
     install_requires = ["html5lib", "pypdf", "Pillow", "reportlab"],
     include_package_data = True,
