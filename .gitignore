@@ -1,50 +1,52 @@
-*.py[cod]
+syntax: glob
+*.pyc
+#SASS original file storage
+*.orig
 
-# C extensions
-*.so
+#Mac crap
+.DS_Store
 
-# Backup files
-*~
+#syntax: regexp
 
-# Packages
-*.egg
-*.egg-info
-dist
-build
-eggs
-parts
-bin
-var
-sdist
-develop-eggs
-.installed.cfg
-lib
-lib64
+# ignore virtualenv
+/env/
+/env2/
+/docs/
+/solr/
+/files/
+/.hg/
 
-# Installer logs
-pip-log.txt
+# media files
+/source/media/
 
-# Unit test / coverage reports
-.eggs/
-.coverage
-.tox
-nosetests.xml
-htmlcov
+# static collector dir
+/static/
+/source/static/.sass-cache
+/source/settings/local_settings.py
+/source/settings/locals.py
+/source/Procfile
+/source/celerybeat.pid
 
-testrender/output
+search/.?MAIN.*
 
-# Translations
-*.mo
+^venv$
 
-# Mr Developer
-.mr.developer.cfg
-.project
-.pydevproject
-.venv
+/.idea
+xhtml2pdf.egg-info/
 
-# Complexity
-output/*.html
-output/*/index.html
+#SASS CACHE
+/source/.sass-cache
+/source/static/.sass-cache
+/html_refactor/source/static/.sass-cache/
+/html_refactor/source/static/css-compiled/base/
+/html_refactor/source/static/css-compiled/components/
+/html_refactor/source/static/css-compiled/mixins/
+/html_refactor/source/static/css-compiled/pages/
 
-# Sphinx
-docs/_build
+/source/static/node_modules/
+
+#breakdown export files
+/html_refactor/exported
+/wireframes/exported
+
+docker/*

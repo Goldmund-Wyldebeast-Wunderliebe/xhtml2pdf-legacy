@@ -20,36 +20,32 @@ try:
     from setuptools import setup, find_packages
 except ImportError:
     from ez_setup import use_setuptools
-
     use_setuptools()
 
 README = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
-import xhtml2pdf
-
 setup(
     name="xhtml2pdf",
-    version=xhtml2pdf.__version__,
+    version="0.0.3.1-gww",
     description="PDF generator using HTML and CSS",
     license="Apache License 2.0",
     author="Dirk Holtwick",
-    maintainer="Sam Spencer",
-    maintainer_email="use-github@doit.com",
-    url="http://github.com/xhtml2pdf/xhtml2pdf",
+    maintainer="Christopher Glass",
+    maintainer_email="tribaal@gmail.com",
+    url="http://www.xhtml2pdf.com",
     keywords="PDF, HTML, XHTML, XML, CSS",
-    install_requires=["html5lib==1.0b10", "httplib2", "pyPdf2", "Pillow", "reportlab>=3.0", "six"],
-    setup_requires=["nose>=1.0"],
-    include_package_data=True,
+    install_requires = ["html5lib", "pypdf", "Pillow", "reportlab"],
+    include_package_data = True,
     packages=find_packages(exclude=["tests", "tests.*"]),
-    #    test_suite = "tests", They're not even working yet
-    entry_points={
+#    test_suite = "tests", They're not even working yet
+    entry_points = {
         'console_scripts': [
             'pisa = xhtml2pdf.pisa:command',
             'xhtml2pdf = xhtml2pdf.pisa:command',
-        ]
-    },
+            ]
+        },
     long_description=README,
-    classifiers=[
+    classifiers =[
         'License :: OSI Approved :: Apache Software License',
         'Development Status :: 4 - Beta',
         'Environment :: Console',
@@ -58,13 +54,6 @@ setup(
         'Intended Audience :: System Administrators',
         'Natural Language :: English',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
         'Topic :: Documentation',
         'Topic :: Multimedia',
         'Topic :: Office/Business',
@@ -78,5 +67,5 @@ setup(
         'Topic :: Text Processing :: Markup :: HTML',
         'Topic :: Text Processing :: Markup :: XML',
         'Topic :: Utilities',
-    ]
-)
+        ]
+    )

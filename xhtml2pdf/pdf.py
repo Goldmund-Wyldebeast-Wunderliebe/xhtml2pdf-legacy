@@ -14,17 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import six
+from xhtml2pdf.util import pisaTempFile, getFile
+
 import logging
-
-
-from xhtml2pdf.util import pisaTempFile, getFile, PyPDF2
-
-
 log = logging.getLogger("xhtml2pdf")
 
-
 class pisaPDF:
+
     def __init__(self, capacity=-1):
         self.capacity = capacity
         self.files = []
@@ -39,8 +35,7 @@ class pisaPDF:
     def addFromFile(self, f):
         if hasattr(f, "read"):
             self.files.append(f)
-        else:
-            self.addFromURI(f)
+        self.addFromURI(f)
 
     def addFromString(self, data):
         self.files.append(pisaTempFile(data, capacity=self.capacity))
@@ -50,12 +45,13 @@ class pisaPDF:
             self.files.append(doc.dest)
 
     def join(self, file=None):
-        output = PyPDF2.PdfFileWriter()
-        for pdffile in self.files:
-            input = PyPDF2.PdfFileReader(pdffile)
-            for pageNumber in six.moves.range(input.getNumPages()):
-                output.addPage(input.getPage(pageNumber))
-
+        import pyPdf # TODO: Why is this in the middle of everything?
+        if pyPdf:
+            output = pyPdf.PdfFileWriter()
+            for pdffile in self.files:
+                input = pyPdf.PdfFileReader(pdffile)
+                for pageNumber in range(0, input.getNumPages()):
+                    output.addPage(input.getPage(pageNumber))
         if file is not None:
             output.write(file)
             return file

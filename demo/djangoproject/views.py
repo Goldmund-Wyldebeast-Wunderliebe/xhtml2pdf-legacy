@@ -6,11 +6,7 @@ from django.shortcuts import render_to_response
 from django.template.loader import get_template
 from django.template import Context
 import xhtml2pdf.pisa as pisa
-try:
-    import StringIO
-    StringIO = StringIO.StringIO
-except Exception:
-    from io import StringIO
+import cStringIO as StringIO
 import cgi
 
 def index(request):
@@ -31,18 +27,16 @@ def index(request):
 
 def download(request):
     if request.POST:
-        result = StringIO()
+        result = StringIO.StringIO()
         pdf = pisa.CreatePDF(
-            StringIO(request.POST["data"]),
+            StringIO.StringIO(request.POST["data"]),
             result
             )
-        #==============README===================
-        #Django < 1.7 is content_type is mimetype
-        #========================================
+
         if not pdf.err:
             return http.HttpResponse(
                 result.getvalue(),
-                content_type='application/pdf')
+                mimetype='application/pdf')
 
     return http.HttpResponse('We had some errors')
 
@@ -50,13 +44,10 @@ def render_to_pdf(template_src, context_dict):
     template = get_template(template_src)
     context = Context(context_dict)
     html  = template.render(context)
-    result = StringIO()
-    pdf = pisa.pisaDocument(StringIO( "{0}".format(html) ), result)
+    result = StringIO.StringIO()
+    pdf = pisa.pisaDocument(StringIO.StringIO(html.encode("ISO-8859-1")), result)
     if not pdf.err:
-        #==============README===================
-        #Django < 1.7 is content_type is mimetype
-        #========================================
-        return http.HttpResponse(result.getvalue(), content_type='application/pdf')
+        return http.HttpResponse(result.getvalue(), mimetype='application/pdf')
     return http.HttpResponse('We had some errors<pre>%s</pre>' % cgi.escape(html))
 
 def ezpdf_sample(request):

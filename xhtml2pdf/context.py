@@ -5,27 +5,20 @@ from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus.frames import Frame, ShowBoundaryValue
+from reportlab.platypus.frames import Frame
 from reportlab.platypus.paraparser import ParaFrag, ps2tt, tt2ps
 from xhtml2pdf.util import getSize, getCoords, getFile, pisaFileObject, \
-    getFrameDimensions, getColor
+    getFrameDimensions
 from xhtml2pdf.w3c import css
 from xhtml2pdf.xhtml2pdf_reportlab import PmlPageTemplate, PmlTableOfContents, \
-    PmlParagraph, PmlParagraphAndImage, PmlPageCount
+    PmlParagraph, PmlParagraphAndImage
 import copy
 import logging
 import os
 import re
 import reportlab
-import six
-
-
-TupleType = tuple
-ListType = list
-try:
-    import urlparse
-except ImportError:
-    import urllib.parse as urlparse
+import types
+import urlparse
 import xhtml2pdf.default
 import xhtml2pdf.parser
 
@@ -53,7 +46,6 @@ superFraction = 0.4
 
 NBSP = u"\u00a0"
 
-
 def clone(self, **kwargs):
     n = ParaFrag(**self.__dict__)
     if kwargs:
@@ -65,20 +57,26 @@ def clone(self, **kwargs):
     n.bulletText = None
     return n
 
-
 ParaFrag.clone = clone
-
 
 def getParaFrag(style):
     frag = ParaFrag()
     frag.sub = 0
     frag.super = 0
     frag.rise = 0
-    frag.underline = 0  # XXX Need to be able to set color to fit CSS tests
+    frag.underline = 0 # XXX Need to be able to set color to fit CSS tests
     frag.strike = 0
     frag.greek = 0
     frag.link = None
     frag.text = ""
+
+    # frag.lineBreak = 0
+    #if bullet:
+    #    frag.fontName, frag.bold, frag.italic = ps2tt(style.bulletFontName)
+    #    frag.fontSize = style.bulletFontSize
+    #    frag.textColor = hasattr(style,'bulletColor') and style.bulletColor or style.textColor
+    #else:
+
     frag.fontName = "Times-Roman"
     frag.fontName, frag.bold, frag.italic = ps2tt(style.fontName)
     frag.fontSize = style.fontSize
@@ -86,7 +84,6 @@ def getParaFrag(style):
 
     # Extras
     frag.leading = 0
-    frag.letterSpacing = "normal"
     frag.leadingSource = "150%"
     frag.leadingSpace = 0
     frag.backColor = None
@@ -129,7 +126,6 @@ def getParaFrag(style):
     frag.wordWrap = None
 
     frag.pageNumber = False
-    frag.pageCount = False
     frag.height = None
     frag.width = None
 
@@ -147,7 +143,6 @@ def getParaFrag(style):
 
     return frag
 
-
 def getDirName(path):
     parts = urlparse.urlparse(path)
     if parts.scheme:
@@ -155,38 +150,24 @@ def getDirName(path):
     else:
         return os.path.dirname(os.path.abspath(path))
 
-
 class pisaCSSBuilder(css.CSSBuilder):
+
     def atFontFace(self, declarations):
-        """
-        Embed fonts
-        """
+        " Embed fonts "
         result = self.ruleset([self.selector('*')], declarations)
-        data = list(result[0].values())[0]
-        if "src" not in data:
-            # invalid - source is required, ignore this specification
-            return {}, {}
+        data = result[0].values()[0]
         names = data["font-family"]
 
         # Font weight
         fweight = str(data.get("font-weight", "normal")).lower()
         bold = fweight in ("bold", "bolder", "500", "600", "700", "800", "900")
-        if not bold and fweight != "normal":
+        if not bold and fweight <> "normal":
             log.warn(self.c.warning("@fontface, unknown value font-weight '%s'", fweight))
 
         # Font style
         italic = str(data.get("font-style", "")).lower() in ("italic", "oblique")
 
-        # The "src" attribute can be a CSS group but in that case
-        # ignore everything except the font URI
-        uri = data['src']
-        if not isinstance(data['src'], str):
-            for part in uri:
-                if isinstance(part, str):
-                    uri = part
-                    break
-
-        src = self.c.getFile(uri, relative=self.c.cssParser.rootPath)
+        src = self.c.getFile(data["src"])
         self.c.loadFont(
             names,
             src,
@@ -194,35 +175,19 @@ class pisaCSSBuilder(css.CSSBuilder):
             italic=italic)
         return {}, {}
 
-    def _pisaAddFrame(self, name, data, first=False, border=None, size=(0, 0)):
+    def _pisaAddFrame(self, name, data, first=False, border=None, size=(0,0)):
         c = self.c
         if not name:
             name = "-pdf-frame-%d" % c.UID()
-        if data.get('is_landscape', False):
-            size = (size[1], size[0])
         x, y, w, h = getFrameDimensions(data, size[0], size[1])
         # print name, x, y, w, h
         #if not (w and h):
         #    return None
         if first:
-            return name, None, data.get("-pdf-frame-border", border), x, y, w, h, data
-
-        return (name, data.get("-pdf-frame-content", None),
-                data.get("-pdf-frame-border", border), x, y, w, h, data)
-
-    def _getFromData(self, data, attr, default=None, func=None):
-        if not func:
-            func = lambda x: x
-
-        if type(attr) in (list, tuple):
-            for a in attr:
-                if a in data:
-                    return func(data[a])
-                return default
-        else:
-            if attr in data:
-                return func(data[attr])
-            return default
+            return (name, None, data.get("-pdf-frame-border", border), x, y, w, h)
+        
+        return (name, data.get("-pdf-frame-content", None), 
+                data.get("-pdf-frame-border", border), x, y, w, h)
 
     def atPage(self, name, pseudopage, declarations):
         c = self.c
@@ -232,93 +197,67 @@ class pisaCSSBuilder(css.CSSBuilder):
 
         if declarations:
             result = self.ruleset([self.selector('*')], declarations)
+            # print "@PAGE", name, pseudopage, declarations, result
 
             if declarations:
-                try:
-                    data = result[0].values()[0]
-                except Exception:
-                    data = result[0].popitem()[1]
+                data = result[0].values()[0]
                 pageBorder = data.get("-pdf-frame-border", None)
 
-        if name in c.templateList:
+        if c.templateList.has_key(name):
             log.warn(self.c.warning("template '%s' has already been defined", name))
 
-        if "-pdf-page-size" in data:
+        if data.has_key("-pdf-page-size"):
             c.pageSize = xhtml2pdf.default.PML_PAGESIZES.get(str(data["-pdf-page-size"]).lower(), c.pageSize)
 
-        isLandscape = False
-        if "size" in data:
+        if data.has_key("size"):
             size = data["size"]
-            if type(size) is not ListType:
+            # print size, c.pageSize
+            if type(size) is not types.ListType:
                 size = [size]
+            isLandscape = False
             sizeList = []
             for value in size:
                 valueStr = str(value).lower()
-                if type(value) is TupleType:
+                if type(value) is types.TupleType:
                     sizeList.append(getSize(value))
                 elif valueStr == "landscape":
                     isLandscape = True
-                elif valueStr == "portrait":
-                    isLandscape = False
-                elif valueStr in xhtml2pdf.default.PML_PAGESIZES:
+                elif xhtml2pdf.default.PML_PAGESIZES.has_key(valueStr):
                     c.pageSize = xhtml2pdf.default.PML_PAGESIZES[valueStr]
                 else:
-                    raise RuntimeError("Unknown size value for @page")
+                    log.warn(c.warning("Unknown size value for @page"))
 
             if len(sizeList) == 2:
-                c.pageSize = tuple(sizeList)
+                c.pageSize = sizeList
             if isLandscape:
                 c.pageSize = landscape(c.pageSize)
 
-        padding_top = self._getFromData(data, 'padding-top', 0, getSize)
-        padding_left = self._getFromData(data, 'padding-left', 0, getSize)
-        padding_right = self._getFromData(data, 'padding-right', 0, getSize)
-        padding_bottom = self._getFromData(data, 'padding-bottom', 0, getSize)
-        border_color = self._getFromData(data, ('border-top-color', 'border-bottom-color',\
-                                                'border-left-color', 'border-right-color'), None, getColor)
-        border_width = self._getFromData(data, ('border-top-width', 'border-bottom-width',\
-                                                'border-left-width', 'border-right-width'), 0, getSize)
-
-        for prop in ("margin-top", "margin-left", "margin-right", "margin-bottom",
-                     "top", "left", "right", "bottom", "width", "height"):
-            if prop in data:
+        for prop in ["margin-top", "margin-left", "margin-right", "margin-bottom",
+                     "top", "left", "right", "bottom", "width", "height"]:
+            if data.has_key(prop):
                 c.frameList.append(self._pisaAddFrame(name, data, first=True, border=pageBorder, size=c.pageSize))
                 break
+        # self._drawing = PmlPageDrawing(self._pagesize)
+
+        #if not c.frameList:
+        #    c.warning("missing frame definitions for template")
+        #    return {}, {}
 
         # Frames have to be calculated after we know the pagesize
         frameList = []
         staticList = []
-        for fname, static, border, x, y, w, h, fdata in c.frameList:
-            fpadding_top = self._getFromData(fdata, 'padding-top', padding_top, getSize)
-            fpadding_left = self._getFromData(fdata, 'padding-left', padding_left, getSize)
-            fpadding_right = self._getFromData(fdata, 'padding-right', padding_right, getSize)
-            fpadding_bottom = self._getFromData(fdata, 'padding-bottom', padding_bottom, getSize)
-            fborder_color = self._getFromData(fdata, ('border-top-color', 'border-bottom-color',\
-                                                      'border-left-color', 'border-right-color'), border_color, getColor)
-            fborder_width = self._getFromData(fdata, ('border-top-width', 'border-bottom-width',\
-                                                      'border-left-width', 'border-right-width'), border_width, getSize)
-
-            if border or pageBorder:
-                frame_border = ShowBoundaryValue()
-            else:
-                frame_border = ShowBoundaryValue(color=fborder_color, width=fborder_width)
-
-            #fix frame sizing problem.
-            if static:
-                x, y, w, h = getFrameDimensions(fdata, c.pageSize[0], c.pageSize[1])
+        for fname, static, border, x, y, w, h in c.frameList:
             x, y, w, h = getCoords(x, y, w, h, c.pageSize)
             if w <= 0 or h <= 0:
                 log.warn(self.c.warning("Negative width or height of frame. Check @frame definitions."))
-
             frame = Frame(
                 x, y, w, h,
                 id=fname,
-                leftPadding=fpadding_left,
-                rightPadding=fpadding_right,
-                bottomPadding=fpadding_bottom,
-                topPadding=fpadding_top,
-                showBoundary=frame_border)
-
+                leftPadding=0,
+                rightPadding=0,
+                bottomPadding=0,
+                topPadding=0,
+                showBoundary=border or pageBorder)
             if static:
                 frame.pisaStaticStory = []
                 c.frameStatic[static] = [frame] + c.frameStatic.get(static, [])
@@ -328,42 +267,41 @@ class pisaCSSBuilder(css.CSSBuilder):
 
         background = data.get("background-image", None)
         if background:
-            #should be relative to the css file
-            background = self.c.getFile(background, relative=self.c.cssParser.rootPath)
+            background = self.c.getFile(background)
+        # print background
 
+        # print frameList
         if not frameList:
+            # print 999
             log.warn(c.warning("missing explicit frame definition for content or just static frames"))
-            fname, static, border, x, y, w, h, data = self._pisaAddFrame(name, data, first=True, border=pageBorder,
-                                                                         size=c.pageSize)
+            fname, static, border, x, y, w, h = self._pisaAddFrame(name, data, first=True, border=pageBorder, size=c.pageSize)
             x, y, w, h = getCoords(x, y, w, h, c.pageSize)
             if w <= 0 or h <= 0:
                 log.warn(c.warning("Negative width or height of frame. Check @page definitions."))
-
-            if border or pageBorder:
-                frame_border = ShowBoundaryValue()
-            else:
-                frame_border = ShowBoundaryValue(color=border_color, width=border_width)
-
             frameList.append(Frame(
                 x, y, w, h,
                 id=fname,
-                leftPadding=padding_left,
-                rightPadding=padding_right,
-                bottomPadding=padding_bottom,
-                topPadding=padding_top,
-                showBoundary=frame_border))
+                leftPadding=0,
+                rightPadding=0,
+                bottomPadding=0,
+                topPadding=0,
+                showBoundary=border or pageBorder))
 
         pt = PmlPageTemplate(
             id=name,
             frames=frameList,
             pagesize=c.pageSize,
-        )
+            )
         pt.pisaStaticList = staticList
         pt.pisaBackground = background
         pt.pisaBackgroundList = c.pisaBackgroundList
 
-        if isLandscape:
-            pt.pageorientation = pt.LANDSCAPE
+        # self._pagesize)
+        # pt.pml_statics = self._statics
+        # pt.pml_draw = self._draw
+        # pt.pml_drawing = self._drawing
+        # pt.pml_background = attrs.background
+        # pt.pml_bgstory = self._bgstory
 
         c.templateList[name] = pt
         c.template = None
@@ -376,22 +314,20 @@ class pisaCSSBuilder(css.CSSBuilder):
         if declarations:
             result = self.ruleset([self.selector('*')], declarations)
             # print "@BOX", name, declarations, result
-
+            
             data = result[0]
             if data:
-                try:
-                    data = data.values()[0]
-                except Exception:
-                    data = data.popitem()[1]
+                data = data.values()[0]
                 self.c.frameList.append(
                     self._pisaAddFrame(name, data, size=self.c.pageSize))
-
+            
         return {}, {} # TODO: It always returns empty dicts?
 
-
 class pisaCSSParser(css.CSSParser):
+
     def parseExternal(self, cssResourceName):
 
+        # print "@import", self.rootPath, cssResourceName
         oldRootPath = self.rootPath
         cssFile = self.c.getFile(cssResourceName, relative=self.rootPath)
         if not cssFile:
@@ -400,27 +336,26 @@ class pisaCSSParser(css.CSSParser):
             self.rootPath = urlparse.urljoin(self.rootPath, cssResourceName)
         else:
             self.rootPath = getDirName(cssFile.uri)
-
+        # print "###", self.rootPath
         result = self.parse(cssFile.getData())
         self.rootPath = oldRootPath
         return result
 
-
 class pisaContext(object):
+
     """
     Helper class for creation of reportlab story and container for
-    various data.
+    varoius data.
     """
 
     def __init__(self, path, debug=0, capacity=-1):
         self.fontList = copy.copy(xhtml2pdf.default.DEFAULT_FONT)
         self.path = []
-        self.capacity = capacity
+        self.capacity=capacity
 
         self.node = None
         self.toc = PmlTableOfContents()
         self.story = []
-        self.indexing_story = None
         self.text = []
         self.log = []
         self.err = 0
@@ -456,7 +391,6 @@ class pisaContext(object):
         self.listCounter = 0
 
         self.cssText = ""
-        self.cssDefaultText = ""
 
         self.image = None
         self.imageData = {}
@@ -477,13 +411,14 @@ class pisaContext(object):
             subject="",
             keywords="",
             pagesize=A4,
-        )
+            )
 
     def UID(self):
         self.uidctr += 1
         return self.uidctr
 
     # METHODS FOR CSS
+
     def addCSS(self, value):
         value = value.strip()
         if value.startswith("<![CDATA["):
@@ -492,44 +427,65 @@ class pisaContext(object):
             value = value[4: - 3]
         self.cssText += value.strip() + "\n"
 
-    # METHODS FOR CSS
-    def addDefaultCSS(self, value):
-        value = value.strip()
-        if value.startswith("<![CDATA["):
-            value = value[9: - 3]
-        if value.startswith("<!--"):
-            value = value[4: - 3]
-        self.cssDefaultText += value.strip() + "\n"
-
     def parseCSS(self):
-        # This self-reference really should be refactored. But for now
-        # we'll settle for using weak references. This avoids memory
-        # leaks because the garbage collector (at least on cPython
-        # 2.7.3) isn't aggressive enough.
-        import weakref
+        #print repr(self.cssText)
+
+        # self.debug(9, self.cssText)
+
+        # XXX Must be handled in a better way!
+
+        #self.cssText = self.cssText.replace("<!--", "\n")
+        #self.cssText = self.cssText.replace("-->", "\n")
+        #self.cssText = self.cssText.replace("<![CDATA[", "\n")
+        #self.cssText = self.cssText.replace("]]>", "\n")
+
+        #self.debug(9, self.cssText)
+
+        # print repr(self.cssText)
+        # file("pisa.css", "wb").write(self.cssText.encode("utf8"))
+
+        # self.cssText = re.compile(r"url\((.*?\))", re.M).sub('"\1"', self.cssText)
+        # self.cssText = re.compile(r"\-moz\-.*?([\;\}]+)", re.M).sub(r"\1", self.cssText)
+
+        # XXX Import has to be implemented!
+        # self.cssText = re.compile(r"\@import.*;", re.M).sub("", self.cssText)
+
+#        if 0:
+#            try:
+#                # Sanitize CSS
+#                import cssutils
+#                import logging
+#                cssutils.log.setlog(logging.getLogger('csslog'))
+#                cssutils.log.setloglevel(logging.DEBUG)
+#                sheet = cssutils.parseString(self.cssText)
+#                self.cssText = sheet.cssText
+#                #err = csslog.getvalue()
+#            except ImportError, e:
+#                pass
+#            except Exception, e:
+#                log.exception(self.error("Error parsing CSS by cssutils"))
+
+        # print self.cssText
+        # file("pisa-sanitized.css", "w").write(self.cssText.encode("utf8"))
+        # print self.cssText
+
 
         self.cssBuilder = pisaCSSBuilder(mediumSet=["all", "print", "pdf"])
-        #self.cssBuilder.c = self
-        self.cssBuilder._c = weakref.ref(self)
-        pisaCSSBuilder.c = property(lambda self: self._c())
-
+        self.cssBuilder.c = self
         self.cssParser = pisaCSSParser(self.cssBuilder)
         self.cssParser.rootPath = self.pathDirectory
-        #self.cssParser.c = self
-        self.cssParser._c = weakref.ref(self)
-        pisaCSSParser.c = property(lambda self: self._c())
+        self.cssParser.c = self
 
         self.css = self.cssParser.parse(self.cssText)
-        self.cssDefault = self.cssParser.parse(self.cssDefaultText)
-        self.cssCascade = css.CSSCascadeStrategy(userAgent=self.cssDefault, user=self.css)
+        self.cssCascade = css.CSSCascadeStrategy(self.css)
         self.cssCascade.parser = self.cssParser
 
     # METHODS FOR STORY
+
     def addStory(self, data):
         self.story.append(data)
 
-    def swapStory(self, story=None):
-        story = story if story is not None else []
+    def swapStory(self, story=[]):
         self.story, story = copy.copy(story), copy.copy(self.story)
         return story
 
@@ -537,7 +493,6 @@ class pisaContext(object):
         style = ParagraphStyle('default%d' % self.UID(), keepWithNext=first.keepWithNext)
         style.fontName = first.fontName
         style.fontSize = first.fontSize
-        style.letterSpacing = first.letterSpacing
         style.leading = max(first.leading + first.leadingSpace, first.fontSize * 1.25)
         style.backColor = first.backColor
         style.spaceBefore = first.spaceBefore
@@ -586,38 +541,59 @@ class pisaContext(object):
         style.paddingBottom = first.paddingBottom
         style.paddingLeft = first.paddingLeft
         style.paddingRight = first.paddingRight
-        style.fontName = tt2ps(first.fontName, first.bold, first.italic)
 
+        # This is the old code replaced by the above, kept for reference
+        #style.borderWidth = 0
+        #if getBorderStyle(first.borderTopStyle):
+        #    style.borderWidth = max(first.borderLeftWidth, first.borderRightWidth, first.borderTopWidth, first.borderBottomWidth)
+        #    style.borderPadding = first.borderPadding # + first.borderWidth
+        #    style.borderColor = first.borderTopColor
+        #    # If no border color is given, the text color is used (XXX Tables!)
+        #    if (style.borderColor is None) and style.borderWidth:
+        #        style.borderColor = first.textColor
+
+        style.fontName = tt2ps(first.fontName, first.bold, first.italic)
         return style
 
     def addTOC(self):
+        # style = copy.deepcopy(self.toParagraphStyle(self.fragBlock))
+        #cssAttrs = copy.deepcopy(self.node.cssAttrs)
+        #frag = copy.deepcopy(self.frag)
         styles = []
-        for i in six.moves.range(20):
+        for i in range(0, 20):
             self.node.attributes["class"] = "pdftoclevel%d" % i
+            #self.node.cssAttrs = copy.deepcopy(cssAttrs)
+            #self.frag = copy.deepcopy(frag)
             self.cssAttr = xhtml2pdf.parser.CSSCollect(self.node, self)
             xhtml2pdf.parser.CSS2Frag(self, {
                 "margin-top": 0,
                 "margin-bottom": 0,
                 "margin-left": 0,
                 "margin-right": 0,
-            }, True)
+                }, True)
             pstyle = self.toParagraphStyle(self.frag)
+            #styles.append(copy.deepcopy(pstyle))
             styles.append(pstyle)
 
+        # log.warn("%r", self.fragBlock.textColor)
         self.toc.levelStyles = styles
         self.addStory(self.toc)
-        self.indexing_story = None
-
-    def addPageCount(self):
-        if not self.multiBuild:
-            self.indexing_story = PmlPageCount()
-            self.multiBuild = True
 
     def dumpPara(self, frags, style):
         return
 
+        print "%s/%s %s *** PARA" % (style.fontSize, style.leading, style.fontName)
+        for frag in frags:
+            print "%s/%s %r %r" % (
+                frag.fontSize,
+                frag.leading,
+                getattr(frag, "cbDefn", None),
+                frag.text)
+        print
+
     def addPara(self, force=False):
 
+        # print self.force, repr(self.text)
         force = (force or self.force)
         self.force = False
 
@@ -629,6 +605,11 @@ class pisaContext(object):
             rfragList = copy.copy(self.fragList)
             rfragList.reverse()
 
+        #for frag in rfragList:
+        #    frag.text = frag.text.rstrip()
+        #    if frag.text:
+        #        break
+
         # Find maximum lead
         maxLeading = 0
         #fontSize = 0
@@ -637,7 +618,14 @@ class pisaContext(object):
             maxLeading = max(leading, frag.fontSize + frag.leadingSpace, maxLeading)
             frag.leading = leading
 
-        if force or (self.text.strip() and self.fragList):
+        if force  or (self.text.strip() and self.fragList):
+
+            # Strip trailing whitespaces
+            #for f in self.fragList:
+            #    f.text = f.text.lstrip()
+            #    if f.text:
+            #        break
+            #self.fragList[-1].lineBreak = self.fragList[-1].text.rstrip()
 
             # Update paragraph style by style of first fragment
             first = self.fragBlock
@@ -647,6 +635,12 @@ class pisaContext(object):
                 style.leading = maxLeading
             else:
                 style.leading = getSize(first.leadingSource, first.fontSize) + first.leadingSpace
+            # style.leading = maxLeading # + first.leadingSpace
+            #style.fontSize = fontSize
+
+            # borderRadius: None,
+            # print repr(self.text.strip()), style.leading, "".join([repr(x.text) for x in self.fragList])
+            # print first.leftIndent, first.listStyleType,repr(self.text)
 
             bulletText = copy.copy(first.bulletText)
             first.bulletText = None
@@ -657,7 +651,7 @@ class pisaContext(object):
                 # We need this empty fragment to work around problems in
                 # Reportlab paragraphs regarding backGround etc.
                 if self.fragList:
-                    self.fragList.append(self.fragList[- 1].clone(text=''))
+                    self.fragList.append(self.fragList[ - 1].clone(text=''))
                 else:
                     blank = self.frag.clone()
                     blank.fontName = "Helvetica"
@@ -670,6 +664,11 @@ class pisaContext(object):
                     style,
                     frags=self.fragAnchor + self.fragList,
                     bulletText=bulletText)
+
+                # Mirrored and BIDI
+                #import unicodedata
+                #for c in self.text:
+                #    print unicodedata.bidirectional(c),
 
                 para.outline = first.outline
                 para.outlineLevel = first.outlineLevel
@@ -696,6 +695,7 @@ class pisaContext(object):
         self.clearFrag()
 
     # METHODS FOR FRAG
+
     def clearFrag(self):
         self.fragList = []
         self.fragStrip = True
@@ -731,14 +731,32 @@ class pisaContext(object):
             frag.rise = frag.fontSize * superFraction
             frag.fontSize = max(frag.fontSize - sizeDelta, 3)
 
-       # bold, italic, and underline
+        # XXX Unused?
+        #if frag.greek:
+        #    frag.fontName = 'symbol'
+        #    text = _greekConvert(text)
+
+        # bold, italic, and underline
         frag.fontName = frag.bulletFontName = tt2ps(frag.fontName, frag.bold, frag.italic)
+        # print frag.bulletFontName
+
+        # Modify text for optimal whitespace handling
+        # XXX Support Unicode whitespaces?
+        # XXX What about images?
+
+        # XXX Doesn't work with Reportlab > 2.1
+        # NBSP = '\xc2\xa0' # u"_"
+
+        #if REPORTLAB22:
+        #    NBSP = u" "
 
         # Replace &shy; with empty and normalize NBSP
         text = (text
-                .replace(u"\xad", u"")
-                .replace(u"\xc2\xa0", NBSP)
-                .replace(u"\xa0", NBSP))
+            .replace(u"\xad", u"")
+            .replace(u"\xc2\xa0", NBSP)
+            .replace(u"\xa0", NBSP))
+
+        # log.debug("> %r", text)
 
         if frag.whiteSpace == "pre":
 
@@ -779,6 +797,7 @@ class pisaContext(object):
                             self.fragStrip = False
                     self.text += frag.text
                     self._appendFrag(frag)
+        # print frag.fontName, repr(frag.text), frag.bulletText
 
     def pushFrag(self):
         self.fragStack.append(self.frag)
@@ -788,6 +807,7 @@ class pisaContext(object):
         self.frag = self.fragStack.pop()
 
     # XXX
+
     def _getFragment(self, l=20):
         try:
             return repr(" ".join(self.node.toxml().split()[:l]))
@@ -799,8 +819,12 @@ class pisaContext(object):
 
     def context(self, msg):
         return "%s\n%s" % (
-            str(msg),
-            self._getFragment(50))
+                str(msg),
+                self._getFragment(50))
+#        return "line %s: %s\n%s" % (
+#                self._getLineNumber(),
+#                str(msg),
+#                self._getFragment(50))
 
     def warning(self, msg, *args):
         self.warn += 1
@@ -819,11 +843,12 @@ class pisaContext(object):
             return self.context(msg)
 
     # UTILS
+
     def _getFileDeprecated(self, name, relative):
         try:
-            path = relative or self.pathDirectory
             if name.startswith("data:"):
                 return name
+            path = relative or self.pathDirectory
             if self.pathCallback is not None:
                 nv = self.pathCallback(name, relative)
             else:
@@ -831,7 +856,7 @@ class pisaContext(object):
                     log.warn("Could not find main directory for getting filename. Use CWD")
                     path = os.getcwd()
                 nv = os.path.normpath(os.path.join(path, name))
-                if not (nv and os.path.isfile(nv)):
+                if not(nv and os.path.isfile(nv)):
                     nv = None
             if nv is None:
                 log.warn(self.warning("File '%s' does not exist", name))
@@ -852,47 +877,40 @@ class pisaContext(object):
         Name of a font
         """
         # print names, self.fontList
-        if type(names) is not ListType:
-            if type(names) not in six.string_types:
-                names = str(names)
-            names = names.strip().split(",")
+        if type(names) is not types.ListType:
+            names = str(names).strip().split(",")
         for name in names:
-            if type(name) not in six.string_types:
-                name = str(name)
-            font = self.fontList.get(name.strip().lower(), None)
+            font = self.fontList.get(str(name).strip().lower(), None)
             if font is not None:
                 return font
         return self.fontList.get(default, None)
 
-    def registerFont(self, fontname, alias=None):
-        alias = alias if alias is not None else []
+    def registerFont(self, fontname, alias=[]):
         self.fontList[str(fontname).lower()] = str(fontname)
         for a in alias:
-            if type(fontname) not in six.string_types:
-                fontname = str(fontname)
-            self.fontList[str(a)] = fontname
+            self.fontList[str(a)] = str(fontname)
 
     def loadFont(self, names, src, encoding="WinAnsiEncoding", bold=0, italic=0):
 
         # XXX Just works for local filenames!
-        if names and src:
+        if names and src: # and src.local:
 
             file = src
             src = file.uri
 
             log.debug("Load font %r", src)
 
-            if type(names) is ListType:
+            if type(names) is types.ListType:
                 fontAlias = names
             else:
-                fontAlias = (x.lower().strip() for x in names.split(",") if x)
+                fontAlias = [x.lower().strip() for x in names.split(",") if x]
 
             # XXX Problems with unicode here
             fontAlias = [str(x) for x in fontAlias]
 
             fontName = fontAlias[0]
             parts = src.split(".")
-            baseName, suffix = ".".join(parts[: - 1]), parts[- 1]
+            baseName, suffix = ".".join(parts[: - 1]), parts[ - 1]
             suffix = suffix.lower()
 
             if suffix in ["ttc", "ttf"]:
@@ -925,12 +943,23 @@ class pisaContext(object):
                     tfile = pisaFileObject(baseName + ".pfb")
                     pfb = tfile.getNamedFile()
                 else:
-                    pfb = file.getNamedFile()
+                    pfb  = file.getNamedFile()
                     tfile = pisaFileObject(baseName + ".afm")
                     afm = tfile.getNamedFile()
 
+                #afm = baseName + ".afm"
+                #pfb = baseName + ".pfb"
+
                 # determine full font name according to weight and style
                 fullFontName = "%s_%d%d" % (fontName, bold, italic)
+
+                #fontNameOriginal = ""
+                #for line in open(afm).readlines()[:-1]:
+                #    if line[:16] == 'StartCharMetrics':
+                #        self.error("Font name not found")
+                #    if line[:8] == 'FontName':
+                #        fontNameOriginal = line[9:].strip()
+                #        break
 
                 # check if font has already been registered
                 if fullFontName in self.fontList:
@@ -953,6 +982,10 @@ class pisaContext(object):
 
                     # Register "normal" name and the place holder for style
                     self.registerFont(fontName, fontAlias + [fullFontName, fontNameOriginal])
+
+                    #import pprint
+                    #pprint.pprint(self.fontList)
+
             else:
                 log.warning(self.warning("wrong attributes for <pdf:font>"))
 

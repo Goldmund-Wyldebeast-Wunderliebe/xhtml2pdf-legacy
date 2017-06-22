@@ -1,0 +1,51 @@
+syntax: glob
+*.pyc
+#SASS original file storage
+*.orig
+
+#Mac crap
+.DS_Store
+
+syntax: regexp
+
+# ignore virtualenv
+^env/
+^env2/
+^docs/
+^solr/
+^files/
+^\.git/
+
+# media files
+^source/media/
+
+# static collector dir
+^static/
+^source/static/.sass-cache
+^source/settings/local_settings.py$
+^source/settings/locals.py$
+^source/Procfile$
+^source/celerybeat\.pid
+
+search/.?MAIN.*
+
+^venv$
+
+^.idea
+
+#SASS CACHE
+^source/.sass-cache
+^source/static/.sass-cache
+^html_refactor/source/static/.sass-cache/
+^html_refactor/source/static/css-compiled/base/
+^html_refactor/source/static/css-compiled/components/
+^html_refactor/source/static/css-compiled/mixins/
+^html_refactor/source/static/css-compiled/pages/
+
+^source/static/node_modules/
+
+#breakdown export files
+^html_refactor/exported
+^wireframes/exported
+
+docker/*

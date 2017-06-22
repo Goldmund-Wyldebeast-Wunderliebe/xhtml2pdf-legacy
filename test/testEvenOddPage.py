@@ -13,8 +13,8 @@ HTML/CSS to PDF converter
 Test for support left/right (even/odd) pages
 """
 
-from cookbook import html2pdf
+from cookbook import HTML2PDF
 
 if __name__ == "__main__":
     xhtml = open('test-template-even-odd.html')
-    html2pdf(xhtml.read(), "testEvenOdd.pdf")
+    HTML2PDF(xhtml.read(), "testEvenOdd.pdf")
