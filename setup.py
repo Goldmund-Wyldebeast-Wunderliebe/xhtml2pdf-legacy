@@ -26,7 +26,7 @@ README = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read()
 
 setup(
     name="xhtml2pdf-legacy",
-    version="3.0.36",
+    version="3.0.37",
     description="PDF generator using HTML and CSS",
     license="Apache License 2.0",
     author="Dirk Holtwick",
