@@ -5,6 +5,11 @@
   "I would like to thank the people mentioned in brackets in this change log
   very much for their help and support!" - Dirk
 ********************************************************************************
+Version 3.0.38, 2017-06-26
+
+- FIX: Make compatible with modern Pillow (adapt ``tostring`` method
+       deprecation in favour of ``tobytes`` method).
+- UPD: Clean up, remove old unused code.
 
 Version 3.0.33, 2010-06-16
 - NEW: Changed license to Apache License 2.0, now completely Open Source 
